@@ -12,12 +12,12 @@ const FLOWS = [
     name: 'rewrite',
     rewrite: true,
     // -r rebundles rxjs, so the middleware/route singleton check is out of scope here.
-    routes: ['/api/trace', '/api/resize'],
+    routes: ['/api/trace', '/api/resize', '/api/resolve'],
   },
   {
     name: 'prune',
     rewrite: false,
-    routes: ['/api/trace', '/api/resize', '/api/stream'],
+    routes: ['/api/trace', '/api/resize', '/api/stream', '/api/resolve'],
   },
 ] as const;
 
@@ -56,6 +56,14 @@ for (const runtime of runtimes) {
           const trace = probes.find((p) => p.route === '/api/trace')!;
 
           expect(trace.body).toContain('OTLPTraceExporter');
+        });
+
+        it('loads the package reached only via literal import.meta.resolve', () => {
+          const probe = probes.find((p) => p.route === '/api/resolve')!;
+
+          // the raw body still carries chunked-transfer framing, so match the
+          // JSON-encoded escaped value as a substring instead of parsing.
+          expect(probe.body).toContain(String.raw`a\\.b\\*c`);
         });
       });
     }

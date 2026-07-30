@@ -121,6 +121,19 @@ describe('detectExternals — node_modules AST scan', () => {
     expect(detection.reasons.get('templater')).toContain('ast-eval');
   });
 
+  it('flags a package that calls import.meta.resolve(...) as ast-import-meta-resolve', () => {
+    const file = installPackage(
+      'self-resolver',
+      'index.mjs',
+      `export const workerUrl = import.meta.resolve('./worker.mjs');`,
+    );
+
+    const detection = detectExternals(trace({ files: [file] }), tmp);
+
+    expect(detection.packages.has('self-resolver')).toBe(true);
+    expect(detection.reasons.get('self-resolver')).toContain('ast-import-meta-resolve');
+  });
+
   it('flags a package that calls Module.register(...) as ast-module-register', () => {
     const file = installPackage(
       '@scope/loader-hook',
@@ -178,6 +191,16 @@ describe('detectExternals — bundled chunk __require scan', () => {
     const detection = detectExternals(trace({ files: ['dist/entry.mjs'] }), tmp);
 
     expect(detection.packages.has('some-pkg')).toBe(true);
+  });
+
+  it('flags an installed package referenced via literal import.meta.resolve in a bundled chunk', () => {
+    installPackage('@duckduckgo/autoconsent');
+    writeChunk('dist/main.mjs', `const url = import.meta.resolve("@duckduckgo/autoconsent");`);
+
+    const detection = detectExternals(trace({ files: ['dist/main.mjs'] }), tmp);
+
+    expect(detection.packages.has('@duckduckgo/autoconsent')).toBe(true);
+    expect(detection.reasons.get('@duckduckgo/autoconsent')).toEqual(['bundled-external']);
   });
 
   it('does not flag a package that is not installed', () => {

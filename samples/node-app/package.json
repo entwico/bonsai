@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
+    "escape-string-regexp": "^5.0.0",
     "fontkit": "2.0.4",
     "lodash": "^4.18.1",
     "mjml": "^5.4.0",

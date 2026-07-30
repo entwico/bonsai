@@ -1,6 +1,6 @@
 # @entwico/bonsai
 
-CLI for shrinking Node.js Docker images. Computes the true runtime closure of your entrypoint(s) — including what static analysis misses (`__require`, native bindings, worker threads, loader patchers) — rebundles with [rolldown](https://rolldown.rs/), and deletes the rest of `node_modules/`.
+CLI for shrinking Node.js Docker images. Computes the true runtime closure of your entrypoint(s) — including what static analysis misses (`__require`, literal `import.meta.resolve()`, native bindings, worker threads, loader patchers) — rebundles with [rolldown](https://rolldown.rs/), and deletes the rest of `node_modules/`.
 
 Designed to be run via `npx` inside e. g. a Dockerfile — not a project dependency.
 
@@ -34,7 +34,7 @@ npx @entwico/bonsai prune ./dist/server/entry.mjs ./src/instrument.mjs
 
 | Flag                             | Description                                                                                                                                                                                                      |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-p <glob>`, `--preserve <glob>` | Extra files to keep regardless of trace output (fontsource woffs, locale JSONs, anything referenced via non-literal `import.meta.resolve()` or `require(varName)`). Repeatable. Patterns matching nothing throw. |
+| `-p <glob>`, `--preserve <glob>` | Extra files to keep regardless of trace output (fontsource woffs, locale JSONs, anything referenced via non-literal `import.meta.resolve(expr)` or `require(varName)` — literal calls are traced automatically). Repeatable. Patterns matching nothing throw. |
 | `--no-rewrite`                   | Disable the rolldown rebundle and only trace + delete. Since 2.0, rewrite is on by default.                                                                                                                      |
 | `--no-minify`                    | Disable minification of the rewritten bundle. Default: on.                                                                                                                                                       |
 | `--no-sourcemap`                 | Skip emitting `.mjs.map` files. Default: on. With sourcemaps, run with `node --enable-source-maps` for symbolicated stack traces.                                                                                |

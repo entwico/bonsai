@@ -41,4 +41,11 @@ describe('classify samples/astro-app', () => {
   it('pulls import-in-the-middle into the closure', () => {
     expect(classification.external).toContain('import-in-the-middle');
   });
+
+  // escape-string-regexp is referenced only via literal import.meta.resolve —
+  // invisible to nft, recovered by the bundle scan.
+  it('classifies escape-string-regexp as external via bundled-external', () => {
+    expect(classification.external).toContain('escape-string-regexp');
+    expect(classification.reasons.get('escape-string-regexp')).toContain('bundled-external');
+  });
 });

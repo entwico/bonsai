@@ -212,6 +212,24 @@ describe('scanFile', () => {
     expect(scanFile(path)).toContain('ast-worker');
   });
 
+  it('flags import.meta.resolve(...) with a literal argument as ast-import-meta-resolve', () => {
+    const path = write('a.mjs', `const url = import.meta.resolve('./worker.mjs');`);
+
+    expect(scanFile(path)).toContain('ast-import-meta-resolve');
+  });
+
+  it('flags import.meta.resolve(...) with a non-literal argument as ast-import-meta-resolve', () => {
+    const path = write('a.mjs', `const url = import.meta.resolve(name);`);
+
+    expect(scanFile(path)).toContain('ast-import-meta-resolve');
+  });
+
+  it('does NOT flag an unrelated .resolve(...) member call', () => {
+    const path = write('a.mjs', `import.meta.resolve; const p = path.resolve('./x'); require(p);`);
+
+    expect(scanFile(path)).not.toContain('ast-import-meta-resolve');
+  });
+
   it('does not flag substrings inside string literals or comments alone', () => {
     const path = write('a.js', `export const docs = "see how to use it"; // a perfectly innocent file`);
 
@@ -292,6 +310,24 @@ describe('scanBundleExternals', () => {
 
   it('ignores non-literal require arguments', () => {
     const path = write('chunk.cjs', `const name = process.env.X; require(name);`);
+
+    expect(scanBundleExternals(path)).toEqual([]);
+  });
+
+  it('recovers a specifier from literal import.meta.resolve(...)', () => {
+    const path = write('chunk.mjs', `const url = import.meta.resolve("@duckduckgo/autoconsent");`);
+
+    expect(scanBundleExternals(path)).toEqual(['@duckduckgo/autoconsent']);
+  });
+
+  it('recovers a subpath specifier from literal import.meta.resolve(...)', () => {
+    const path = write('chunk.mjs', `import.meta.resolve("pkg/dist/inner.js");`);
+
+    expect(scanBundleExternals(path)).toEqual(['pkg/dist/inner.js']);
+  });
+
+  it('ignores non-literal import.meta.resolve arguments', () => {
+    const path = write('chunk.mjs', `const name = process.env.X; import.meta.resolve(name);`);
 
     expect(scanBundleExternals(path)).toEqual([]);
   });

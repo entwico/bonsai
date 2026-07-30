@@ -19,6 +19,10 @@ import * as fontkit from 'fontkit';
 // requires its component modules by computed name — classic ast-dyn-require.
 import mjml2html from 'mjml';
 
+// referenced only through literal import.meta.resolve — no import edge exists,
+// so only the bundle scan can keep it.
+export const resolvedUrl = import.meta.resolve('escape-string-regexp');
+
 export const externals = {
   chromium,
   MongoClient,

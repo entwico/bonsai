@@ -18,6 +18,7 @@ const MARKERS = [
   'thread-stream',
   'piscina',
   'workerpool',
+  'import.meta.resolve',
 ];
 
 // importing/requiring any of these signals that the consuming package
@@ -29,6 +30,20 @@ const LOADER_PATCHERS = new Set(['import-in-the-middle', 'require-in-the-middle'
 const WORKER_SPAWNERS = new Set(['thread-stream', 'piscina', 'workerpool']);
 
 const CHILD_PROCESS_SPECIFIER = /^(?:node:)?child_process$/;
+
+// matches the callee of `import.meta.resolve(...)` — a MemberExpression
+// whose object is the `import.meta` MetaProperty.
+function isImportMetaResolve(callee: any): boolean {
+  return (
+    callee?.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property?.type === 'Identifier' &&
+    callee.property.name === 'resolve' &&
+    callee.object?.type === 'MetaProperty' &&
+    callee.object.meta?.name === 'import' &&
+    callee.object.property?.name === 'meta'
+  );
+}
 
 function reasonForSpecifier(name: string): DetectReason | null {
   if (LOADER_PATCHERS.has(name)) return 'ast-loader-patch';
@@ -101,8 +116,10 @@ function collectChildProcessBindings(ast: any): ChildProcessBindings {
   return bindings;
 }
 
-// bare specifiers a bundled chunk pulls in via require()/__require(). rolldown inlines
-// CJS requires as __require(...) helper calls that NFT doesn't treat as import edges.
+// bare specifiers a bundled chunk pulls in via require()/__require() or literal
+// import.meta.resolve(). rolldown inlines CJS requires as __require(...) helper calls
+// that NFT doesn't treat as import edges, and NFT's evaluator doesn't model
+// import.meta.resolve at all — even with a literal argument.
 export function scanBundleExternals(path: string): string[] {
   let source: string;
 
@@ -113,7 +130,7 @@ export function scanBundleExternals(path: string): string[] {
   }
 
   // `require(` is a substring of `__require(`, so this pre-filter covers both.
-  if (!source.includes('require(')) return [];
+  if (!source.includes('require(') && !source.includes('import.meta.resolve')) return [];
 
   let ast;
 
@@ -144,9 +161,9 @@ export function scanBundleExternals(path: string): string[] {
   simple(ast, {
     CallExpression(node: any) {
       const callee = node.callee;
+      const isRequire = callee?.type === 'Identifier' && (callee.name === 'require' || callee.name === '__require');
 
-      if (callee?.type !== 'Identifier') return;
-      if (callee.name !== 'require' && callee.name !== '__require') return;
+      if (!isRequire && !isImportMetaResolve(callee)) return;
 
       const arg = node.arguments?.[0];
 
@@ -258,6 +275,12 @@ export function scanFile(path: string): DetectReason[] {
 
       if (callee.type === 'Identifier' && callee.name === 'eval') {
         reasons.add('ast-eval');
+      }
+
+      // import.meta.resolve resolves against the calling file's on-disk location,
+      // which bundling relocates — and NFT never follows it, literal or not.
+      if (isImportMetaResolve(callee)) {
+        reasons.add('ast-import-meta-resolve');
       }
     },
 

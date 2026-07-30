@@ -65,7 +65,8 @@ export function detectExternals(trace: NodeFileTraceResult, cwd: string): Detect
 }
 
 // scan the app's own bundled chunks (outside node_modules) for installed packages
-// referenced via rolldown's __require(...) helper that NFT never follows.
+// referenced via rolldown's __require(...) helper or literal import.meta.resolve(),
+// neither of which NFT follows.
 export function detectBundleExternals(trace: NodeFileTraceResult, cwd: string): Set<string> {
   const packages = new Set<string>();
 

@@ -67,4 +67,11 @@ describe('classify samples/node-app', () => {
   it('bundles the mjml wrapper (only mjml-core externalizes)', () => {
     expect(classification.external).not.toContain('mjml');
   });
+
+  // escape-string-regexp is referenced only via literal import.meta.resolve —
+  // invisible to nft, recovered by the bundle scan.
+  it('classifies escape-string-regexp as external via bundled-external', () => {
+    expect(classification.external).toContain('escape-string-regexp');
+    expect(classification.reasons.get('escape-string-regexp')).toContain('bundled-external');
+  });
 });

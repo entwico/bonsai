@@ -1,5 +1,11 @@
 # @entwico/bonsai
 
+## 2.1.0
+
+### Minor Changes
+
+- e97ff92: properly trace literal `import.meta.resolve()` references
+
 ## 2.0.1
 
 ### Patch Changes

@@ -49,14 +49,13 @@ function run(cmd: string, args: string[], cwd: string): void {
 }
 
 export interface FlowSpec {
-  // extra prune args; entrypoints are appended by pruneArgs()
   rewrite: boolean;
 }
 
 // install + build, then trace-and-prune. rewrite is bonsai's default and emits the bundled
-// entry + instrument via rolldown, turning the CJS require into the __require NFT can't see;
+// entrypoints via rolldown, turning CJS requires into the __require NFT can't see;
 // --no-rewrite is the trace-only path.
-export function installBuildPrune(sampleDir: string, pm: Pm, flow: FlowSpec): void {
+export function installBuildPrune(sampleDir: string, pm: Pm, flow: FlowSpec, entrypoints: string[]): void {
   run(pm, INSTALL_ARGS[pm], sampleDir);
   run(pm, ['run', 'build'], sampleDir);
 
@@ -64,7 +63,7 @@ export function installBuildPrune(sampleDir: string, pm: Pm, flow: FlowSpec): vo
 
   if (!flow.rewrite) args.push('--no-rewrite');
 
-  args.push('dist/server/entry.mjs', 'src/instrument.mjs');
+  args.push(...entrypoints);
 
   run('node', args, sampleDir);
 }
@@ -135,20 +134,16 @@ export interface ProbeResult {
   body: string;
 }
 
-// in rewrite mode the bundled instrument.mjs lives in dist/server; otherwise the source
-// preload is used directly. a pruned-away package surfaces as a boot crash or a 5xx.
+// boots `node <nodeArgs>` in the pruned sample dir and probes the routes.
+// a pruned-away package surfaces as a boot crash or a 5xx.
 export async function bootAndProbe(
   sampleDir: string,
-  flow: FlowSpec,
+  nodeArgs: string[],
   routes: string[],
 ): Promise<{ results: ProbeResult[]; log: string }> {
   const port = await freePort();
-  const entry = join(sampleDir, 'dist', 'server', 'entry.mjs');
-  const instrument = flow.rewrite
-    ? join(sampleDir, 'dist', 'server', 'instrument.mjs')
-    : join(sampleDir, 'src', 'instrument.mjs');
 
-  const child = spawn('node', ['--import', instrument, entry], {
+  const child = spawn('node', nodeArgs, {
     cwd: sampleDir,
     env: childEnv({ HOST: '127.0.0.1', PORT: String(port) }) as NodeJS.ProcessEnv,
     stdio: ['ignore', 'pipe', 'pipe'],

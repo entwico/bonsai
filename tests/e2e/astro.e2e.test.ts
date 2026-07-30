@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Pm, type ProbeResult, bootAndProbe, installBuildPrune, prepareSample } from './harness.js';
 import { discoverRuntimes } from './runtimes.js';
@@ -34,9 +35,16 @@ for (const runtime of runtimes) {
 
         beforeAll(async () => {
           sample = prepareSample('astro-app', pm, runtime);
-          installBuildPrune(sample.dir, pm, flow);
+          installBuildPrune(sample.dir, pm, flow, ['dist/server/entry.mjs', 'src/instrument.mjs']);
 
-          const out = await bootAndProbe(sample.dir, flow, [...flow.routes]);
+          // in rewrite mode the bundled instrument.mjs lives in dist/server; otherwise
+          // the source preload is used directly.
+          const instrument = flow.rewrite
+            ? join(sample.dir, 'dist', 'server', 'instrument.mjs')
+            : join(sample.dir, 'src', 'instrument.mjs');
+          const entry = join(sample.dir, 'dist', 'server', 'entry.mjs');
+
+          const out = await bootAndProbe(sample.dir, ['--import', instrument, entry], [...flow.routes]);
 
           probes = out.results;
           serverLog = out.log;

@@ -19,7 +19,23 @@ const child = fork(new URL('./worker.js', import.meta.url), {
 const pluginPath = process.env.PLUGIN ?? './plugins/foo.js';
 const plugin = (await import(pluginPath)) as { name: string; run(): string };
 
-const server = createServer((_req, res) => {
+const server = createServer((req, res) => {
+  if (req.url === '/playwright') {
+    // the wrapper may bundle away while playwright-core stays external — loading it
+    // proves the pruned tree carries playwright-core's whole dynamic-require web.
+    import('playwright')
+      .then(({ chromium }) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ browser: chromium.name(), launch: typeof chromium.launch }));
+      })
+      .catch((err: unknown) => {
+        res.writeHead(500, { 'content-type': 'text/plain' });
+        res.end(String(err));
+      });
+
+    return;
+  }
+
   child.send({ type: 'ping' });
 
   child.once('message', (msg) => {
@@ -28,8 +44,10 @@ const server = createServer((_req, res) => {
   });
 });
 
-server.listen(3000, () => {
-  console.log('listening on :3000 with plugin', plugin.name);
+const port = Number(process.env.PORT ?? 3000);
+
+server.listen(port, process.env.HOST ?? '127.0.0.1', () => {
+  console.log(`listening on :${port} with plugin`, plugin.name);
 });
 
 process.on('SIGTERM', () => {

@@ -32,13 +32,13 @@ npx @entwico/bonsai prune ./dist/server/entry.mjs ./src/instrument.mjs
 
 ## Flags
 
-| Flag                             | Description                                                                                                                                                                                                      |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flag                             | Description                                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-p <glob>`, `--preserve <glob>` | Extra files to keep regardless of trace output (fontsource woffs, locale JSONs, anything referenced via non-literal `import.meta.resolve(expr)` or `require(varName)` — literal calls are traced automatically). Repeatable. Patterns matching nothing throw. |
-| `--no-rewrite`                   | Disable the rolldown rebundle and only trace + delete. Since 2.0, rewrite is on by default.                                                                                                                      |
-| `--no-minify`                    | Disable minification of the rewritten bundle. Default: on.                                                                                                                                                       |
-| `--no-sourcemap`                 | Skip emitting `.mjs.map` files. Default: on. With sourcemaps, run with `node --enable-source-maps` for symbolicated stack traces.                                                                                |
-| `-v`, `--verbose`                | Verbose logs                                                                                                                                                                                                     |
+| `--no-rewrite`                   | Disable the rolldown rebundle and only trace + delete. Since 2.0, rewrite is on by default.                                                                                                                                                                   |
+| `--no-minify`                    | Disable minification of the rewritten bundle. Default: on.                                                                                                                                                                                                    |
+| `--no-sourcemap`                 | Skip emitting `.mjs.map` files. Default: on. With sourcemaps, run with `node --enable-source-maps` for symbolicated stack traces.                                                                                                                             |
+| `-v`, `--verbose`                | Verbose logs                                                                                                                                                                                                                                                  |
 
 ## Dockerfile examples
 

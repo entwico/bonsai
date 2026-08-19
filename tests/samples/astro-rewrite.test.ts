@@ -43,7 +43,7 @@ describe('rewrite samples/astro-app', () => {
     writeDebug('rewrite-astro.json', {
       external: result.classification.external,
       reasons: result.classification.reasons,
-      outDir: result.outDir,
+      outDirs: result.outDirs,
       outFiles: readdirSync(SERVER_DIR).map((f) => {
         const path = join(SERVER_DIR, f);
         const stat = statSync(path);

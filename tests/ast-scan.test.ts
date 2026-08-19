@@ -182,6 +182,18 @@ describe('scanFile', () => {
     expect(scanFile(path)).toContain('ast-loader-patch');
   });
 
+  it('flags require(`require-in-the-middle`) via template literal as ast-loader-patch', () => {
+    const path = write('template-require.js', 'const ritm = require(`require-in-the-middle`);');
+
+    expect(scanFile(path)).toEqual(['ast-loader-patch']);
+  });
+
+  it('does NOT flag require(`literal template`) as ast-dyn-require', () => {
+    const path = write('template-literal-require.js', 'const x = require(`lodash`);');
+
+    expect(scanFile(path)).toEqual([]);
+  });
+
   it('flags imports of require-in-the-middle (ESM) as ast-loader-patch', () => {
     const path = write('a.mjs', `import Hook from 'require-in-the-middle';`);
 
@@ -328,6 +340,25 @@ describe('scanBundleExternals', () => {
 
   it('ignores non-literal import.meta.resolve arguments', () => {
     const path = write('chunk.mjs', `const name = process.env.X; import.meta.resolve(name);`);
+
+    expect(scanBundleExternals(path)).toEqual([]);
+  });
+
+  // minifiers rewrite string literals into template literals
+  it('recovers a specifier from a zero-expression template literal', () => {
+    const path = write('chunk.mjs', 'const url = import.meta.resolve(`@fontsource/inter/files/x.woff`);');
+
+    expect(scanBundleExternals(path)).toEqual(['@fontsource/inter/files/x.woff']);
+  });
+
+  it('recovers a template-literal specifier from __require(...)', () => {
+    const path = write('chunk.mjs', 'const mod = __require(`some-pkg`);');
+
+    expect(scanBundleExternals(path)).toEqual(['some-pkg']);
+  });
+
+  it('ignores template literals with expressions', () => {
+    const path = write('chunk.mjs', 'const v = `x`; import.meta.resolve(`pkg/${v}`); __require(`pkg-${v}`);');
 
     expect(scanBundleExternals(path)).toEqual([]);
   });

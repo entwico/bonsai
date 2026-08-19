@@ -256,7 +256,7 @@ describe('prune', () => {
         external: new Set(['native-pkg']),
         reasons: new Map(),
       },
-      outDir: join(tempDir, 'dist', 'server'),
+      outDirs: [join(tempDir, 'dist', 'server')],
     });
 
     const { nodeFileTrace } = await import('@vercel/nft');

@@ -1,5 +1,5 @@
 import { readdir, rm, rmdir, unlink } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { nodeFileTrace } from '@vercel/nft';
 import { expandClosure } from '../bundle/closure';
 import { detectBundleExternals } from '../bundle/detection';
@@ -29,24 +29,24 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
   let forceExternal = new Set<string>();
 
   if (opts.rewrite) {
-    const outDir = dirname(resolve(cwd, entrypoints[0]));
-
     if (verbose) {
       console.log('rewriting entrypoints:', entrypoints.join(', '));
-      console.log('output dir:           ', outDir);
     } else {
       const label = entrypoints.length === 1 ? 'entry' : 'entries';
 
-      console.log(`rewriting ${entrypoints.length} ${label} → ${outDir}`);
+      console.log(`rewriting ${entrypoints.length} ${label} in place`);
     }
 
-    const { classification } = await rewrite({
+    const { classification, outDirs } = await rewrite({
       entrypoints,
-      outDir,
       cwd,
       minify: opts.minify,
       sourcemap: opts.sourcemap,
     });
+
+    if (verbose) {
+      console.log('output dirs:          ', outDirs.join(', '));
+    }
 
     const externalCount = classification.external.size;
 

@@ -9,7 +9,8 @@ export type DetectReason =
   | 'ast-module-register'
   | 'ast-loader-patch'
   | 'ast-import-meta-resolve'
-  | 'bundled-external';
+  | 'bundled-external'
+  | 'unresolved-import';
 
 export type ExternalReason = DetectReason | { reachableFrom: string };
 

@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "start": "node --import ./dist/server/instrument.mjs ./dist/server/entry.mjs",
-    "start:dev": "node --import ./src/instrument.mjs ./dist/server/entry.mjs"
+    "start": "node --import ./src/instrument.mjs ./dist/server/entry.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.0.2",

@@ -31,6 +31,19 @@ const WORKER_SPAWNERS = new Set(['thread-stream', 'piscina', 'workerpool']);
 
 const CHILD_PROCESS_SPECIFIER = /^(?:node:)?child_process$/;
 
+// a plain string literal, or the zero-expression template literal minifiers turn it into
+function literalString(node: any): string | null {
+  if (node?.type === 'Literal' && typeof node.value === 'string') return node.value;
+
+  if (node?.type === 'TemplateLiteral' && node.expressions.length === 0 && node.quasis.length === 1) {
+    const cooked = node.quasis[0]?.value?.cooked;
+
+    return typeof cooked === 'string' ? cooked : null;
+  }
+
+  return null;
+}
+
 // matches the callee of `import.meta.resolve(...)` — a MemberExpression
 // whose object is the `import.meta` MetaProperty.
 function isImportMetaResolve(callee: any): boolean {
@@ -89,9 +102,9 @@ function collectChildProcessBindings(ast: any): ChildProcessBindings {
       if (!init || init.type !== 'CallExpression') return;
       if (init.callee?.type !== 'Identifier' || init.callee.name !== 'require') return;
 
-      const arg = init.arguments?.[0];
+      const spec = literalString(init.arguments?.[0]);
 
-      if (arg?.type !== 'Literal' || typeof arg.value !== 'string' || !CHILD_PROCESS_SPECIFIER.test(arg.value)) {
+      if (spec === null || !CHILD_PROCESS_SPECIFIER.test(spec)) {
         return;
       }
 
@@ -165,9 +178,9 @@ export function scanBundleExternals(path: string): string[] {
 
       if (!isRequire && !isImportMetaResolve(callee)) return;
 
-      const arg = node.arguments?.[0];
+      const spec = literalString(node.arguments?.[0]);
 
-      if (arg?.type === 'Literal' && typeof arg.value === 'string') specifiers.add(arg.value);
+      if (spec !== null) specifiers.add(spec);
     },
   });
 
@@ -264,8 +277,10 @@ export function scanFile(path: string): DetectReason[] {
 
         if (!arg) return;
 
-        if (arg.type === 'Literal' && typeof arg.value === 'string') {
-          const r = reasonForSpecifier(arg.value);
+        const spec = literalString(arg);
+
+        if (spec !== null) {
+          const r = reasonForSpecifier(spec);
 
           if (r) reasons.add(r);
         } else if (arg.type !== 'TemplateLiteral') {
@@ -291,8 +306,10 @@ export function scanFile(path: string): DetectReason[] {
 
       if (!arg) return;
 
-      if (arg.type === 'Literal' && typeof arg.value === 'string') {
-        const r = reasonForSpecifier(arg.value);
+      const spec = literalString(arg);
+
+      if (spec !== null) {
+        const r = reasonForSpecifier(spec);
 
         if (r) reasons.add(r);
       } else if (arg.type !== 'TemplateLiteral') {

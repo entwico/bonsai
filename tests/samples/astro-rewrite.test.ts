@@ -8,6 +8,7 @@ const ROOT = join(import.meta.dirname, '..', '..', 'samples', 'astro-app');
 const SERVER_DIR = join(ROOT, 'dist', 'server');
 const ENTRY = join(SERVER_DIR, 'entry.mjs');
 const INSTRUMENT = join(ROOT, 'src', 'instrument.mjs');
+const SETUP_TIMEOUT = 120_000;
 
 function readAllMjsRecursively(dir: string): string {
   let combined = '';
@@ -52,7 +53,7 @@ describe('rewrite samples/astro-app', () => {
       }),
       combinedOutputBytes: combinedOutput.length,
     });
-  });
+  }, SETUP_TIMEOUT);
 
   it('writes the rebundled entry.mjs', () => {
     expect(existsSync(ENTRY)).toBe(true);

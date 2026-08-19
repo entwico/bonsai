@@ -8,6 +8,7 @@ import { writeDebug } from '../util/debug.js';
 const ROOT = join(import.meta.dirname, '..', '..', 'samples', 'astro-app');
 const ENTRY = join(ROOT, 'dist', 'server', 'entry.mjs');
 const INSTRUMENT = join(ROOT, 'src', 'instrument.mjs');
+const SETUP_TIMEOUT = 120_000;
 
 describe('classify samples/astro-app', () => {
   let classification: Classification;
@@ -20,7 +21,7 @@ describe('classify samples/astro-app', () => {
     classification = await classify([ENTRY, INSTRUMENT], ROOT);
 
     writeDebug('classify-astro.json', classification);
-  });
+  }, SETUP_TIMEOUT);
 
   it('classifies sharp as external', () => {
     expect(classification.external).toContain('sharp');

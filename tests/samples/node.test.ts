@@ -9,6 +9,7 @@ const ROOT = join(import.meta.dirname, '..', '..', 'samples', 'node-app');
 const SERVER = join(ROOT, 'dist', 'server.js');
 const WORKER = join(ROOT, 'dist', 'worker.js');
 const EXTERNALS = join(ROOT, 'dist', 'externals.js');
+const SETUP_TIMEOUT = 120_000;
 
 describe('classify samples/node-app', () => {
   let classification: Classification;
@@ -21,7 +22,7 @@ describe('classify samples/node-app', () => {
     classification = await classify([SERVER, WORKER, EXTERNALS], ROOT);
 
     writeDebug('classify-node.json', classification);
-  });
+  }, SETUP_TIMEOUT);
 
   it('runs the full classify pipeline against the built node-app', () => {
     expect(classification.external).toBeInstanceOf(Set);

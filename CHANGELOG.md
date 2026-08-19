@@ -1,5 +1,17 @@
 # @entwico/bonsai
 
+## 3.0.0
+
+### Major Changes
+
+- c33c09b: rewrite each entrypoint in place next to its original — preloads and worker paths that pointed at files relocated into the first entry's directory must now use the original entry paths
+
+### Patch Changes
+
+- c33c09b: no longer bundle packages already classified as external (native bindings, NFT warnings) into the rewritten output
+- c33c09b: trace `import.meta.resolve()` and `__require()` specifiers that minifiers turned into template literals
+- c33c09b: keep bare imports the rewrite cannot resolve external and preserved instead of failing the build
+
 ## 2.1.0
 
 ### Minor Changes

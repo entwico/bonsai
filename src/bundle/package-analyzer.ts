@@ -72,7 +72,7 @@ export class PackageAnalyzer {
   }
 
   private _walkExportsForImport(node: any, depth = 0): string | null {
-    if (depth > 32 || !node) return null;
+    if (!node || depth > 32) return null;
 
     if (typeof node === 'string') return node;
 

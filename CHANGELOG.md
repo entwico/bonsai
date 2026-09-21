@@ -1,5 +1,11 @@
 # @entwico/bonsai
 
+## 3.0.1
+
+### Patch Changes
+
+- 8339f73: keep the `require`-condition files of dual-condition `exports`/`imports` targets that an ESM file loads through `createRequire` (e.g. pdfkit's standard fonts)
+
 ## 3.0.0
 
 ### Major Changes

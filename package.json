@@ -1,6 +1,6 @@
 {
   "name": "@entwico/bonsai",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "packageManager": "pnpm@12.5.1",
   "description": "Ship the smallest correct production node_modules: full runtime-closure tracing + rolldown rebundle",
   "license": "MIT",

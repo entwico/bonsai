@@ -1,11 +1,11 @@
 import { readdir, rm, rmdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { nodeFileTrace } from '@vercel/nft';
 import { expandClosure } from '../bundle/closure';
 import { detectBundleExternals } from '../bundle/detection';
 import { resolveExternalRoots } from '../bundle/external-roots';
 import { indexTracedPackages } from '../bundle/package-utils';
 import { rewrite } from '../bundle/rewrite';
+import { trace } from '../bundle/trace';
 import { expandGlobs } from '../utils/expand-globs';
 import { sortByString } from '../utils/sort';
 
@@ -90,7 +90,7 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
     console.log('tracing entrypoints:', traceEntries.join(', '));
   }
 
-  const result = await nodeFileTrace(allTraceInputs, { base: cwd });
+  const result = await trace(allTraceInputs, cwd);
 
   // rewrite mode already recovered __require externals via classify. without it, scan the
   // bundled chunks here, trace their closure, and force-preserve them.
@@ -102,7 +102,7 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
       const roots = resolveExternalRoots(external, cwd);
 
       if (roots.length > 0) {
-        const supplemental = await nodeFileTrace(roots, { base: cwd });
+        const supplemental = await trace(roots, cwd);
 
         for (const f of supplemental.fileList) result.fileList.add(f);
         for (const w of supplemental.warnings) result.warnings.add(w);

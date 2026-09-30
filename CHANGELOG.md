@@ -1,5 +1,11 @@
 # @entwico/bonsai
 
+## 3.0.2
+
+### Patch Changes
+
+- bd20300: resolve nested package copies from their importer
+
 ## 3.0.1
 
 ### Patch Changes

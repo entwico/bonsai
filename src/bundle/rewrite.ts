@@ -1,9 +1,11 @@
+import { realpathSync } from 'node:fs';
+import { isBuiltin } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { type Plugin, rolldown } from 'rolldown';
 import { classify } from './classify';
 import { expandClosure } from './closure';
 import { PackageAnalyzer } from './package-analyzer';
-import { packageNameFromSpecifier } from './package-utils';
+import { findPackageDir, packageDirOfFile, packageNameFromSpecifier } from './package-utils';
 import type { Classification, DetectReason } from './types';
 
 export interface RewriteOptions {
@@ -17,29 +19,93 @@ export interface RewriteOptions {
   sourcemap?: boolean | undefined;
 }
 
+/** an external whose importer resolves to a different copy than the output directory would. */
+export interface NestedExternal {
+  pkg: string;
+  /** absolute directory of the copy the importer resolves to */
+  dir: string;
+  /** absolute file the import resolved to; the bundle references it by relative path */
+  file: string;
+}
+
 export interface RewriteResult {
   classification: Classification;
   outDirs: string[];
+  nestedExternals: NestedExternal[];
 }
 
+interface ExternalsPluginOptions {
+  classification: Classification;
+  analyzer: PackageAnalyzer;
+  outDir: string;
+  unresolved: Set<string>;
+  nested: NestedExternal[];
+}
+
+function samePackageDir(a: string, b: string | null): boolean {
+  if (!b) return false;
+
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return false;
+  }
+}
+
+// decides per import edge whether a bare specifier stays external. an external
+// keeps its bare specifier only when the output directory resolves it to the same
+// copy the importer did — a nested copy (a second version under the importer's
+// `node_modules`) is referenced by relative path instead, since node would
+// otherwise load the hoisted version from the bundle's location.
+//
 // bare imports rolldown can't resolve are kept external instead of failing
 // the build — node may still resolve them at runtime, and the prune preserves them.
-function createExternalFallbackPlugin(unresolved: Set<string>): Plugin {
+function createExternalsPlugin(opts: ExternalsPluginOptions): Plugin {
+  const outDirCopies = new Map<string, string | null>();
+
+  const outDirResolves = (pkg: string): string | null => {
+    let dir = outDirCopies.get(pkg);
+
+    if (dir === undefined) {
+      dir = findPackageDir(pkg, opts.outDir);
+      outDirCopies.set(pkg, dir);
+    }
+
+    return dir;
+  };
+
   return {
-    name: 'bonsai-external-fallback',
-    async resolveId(source, importer) {
+    name: 'bonsai-externals',
+    async resolveId(source, importer, options) {
+      if (source.startsWith('\0')) return null;
+      if (isBuiltin(source)) return { id: source, external: true };
+
       const pkg = packageNameFromSpecifier(source);
 
-      if (!pkg || source.startsWith('\0')) return null;
+      if (!pkg) return null;
 
       // eslint-disable-next-line unicorn/no-this-outside-of-class -- `this` is rolldown's plugin context
-      const resolved = await this.resolve(source, importer);
+      const resolved = await this.resolve(source, importer, { kind: options.kind });
 
-      if (resolved) return resolved;
+      if (!resolved) {
+        opts.unresolved.add(pkg);
 
-      unresolved.add(pkg);
+        return { id: source, external: true };
+      }
 
-      return { id: source, external: true };
+      if (resolved.external) return resolved;
+
+      const external = opts.classification.external.has(pkg) || !opts.analyzer.isSafeToBundle(source, importer);
+
+      if (!external) return resolved;
+
+      const dir = packageDirOfFile(resolved.id, pkg);
+
+      if (!dir || samePackageDir(dir, outDirResolves(pkg))) return { id: source, external: true };
+
+      opts.nested.push({ pkg, dir, file: resolved.id });
+
+      return { id: resolved.id, external: 'relative' };
     },
   };
 }
@@ -52,6 +118,7 @@ export async function rewrite(opts: RewriteOptions): Promise<RewriteResult> {
   const classification = await classify(absoluteEntries, opts.cwd);
   const analyzer = new PackageAnalyzer(opts.cwd);
   const unresolved = new Set<string>();
+  const nestedExternals: NestedExternal[] = [];
 
   // each entry is rewritten next to itself so runtime references to its original
   // path stay valid; entries sharing a directory share one build and its chunks.
@@ -70,23 +137,11 @@ export async function rewrite(opts: RewriteOptions): Promise<RewriteResult> {
     }
   }
 
-  const isExternal = (id: string): boolean => {
-    if (id.startsWith('.') || id.startsWith('/')) return false;
-    if (id.startsWith('node:')) return true;
-
-    const pkg = packageNameFromSpecifier(id);
-
-    if (pkg && classification.external.has(pkg)) return true;
-
-    return !analyzer.isSafeToBundle(id);
-  };
-
   for (const [outDir, entries] of groups) {
     const bundle = await rolldown({
       input: entries,
       cwd: opts.cwd,
-      external: (id) => isExternal(id),
-      plugins: [createExternalFallbackPlugin(unresolved)],
+      plugins: [createExternalsPlugin({ classification, analyzer, outDir, unresolved, nested: nestedExternals })],
       platform: 'node',
       transform: {
         define: { 'process.env.NODE_ENV': '"production"' },
@@ -127,5 +182,5 @@ export async function rewrite(opts: RewriteOptions): Promise<RewriteResult> {
     }
   }
 
-  return { classification, outDirs };
+  return { classification, outDirs, nestedExternals };
 }

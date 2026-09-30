@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { packageNameFromSpecifier, packageOfFile } from '../src/bundle/package-utils';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { findPackageDir, packageDirOfFile, packageNameFromSpecifier, packageOfFile } from '../src/bundle/package-utils';
 
 describe('packageOfFile', () => {
   it('extracts plain package name from hoisted layout', () => {
@@ -71,5 +74,48 @@ describe('packageNameFromSpecifier', () => {
 
   it('returns null for the empty specifier', () => {
     expect(packageNameFromSpecifier('')).toBeNull();
+  });
+});
+
+describe('findPackageDir', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = realpathSync(mkdtempSync(join(tmpdir(), 'find-package-dir-')));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('returns the nearest copy walking up from the given directory', () => {
+    const hoisted = join(tmp, 'node_modules', 'dual');
+    const nested = join(tmp, 'node_modules', 'consumer', 'node_modules', 'dual');
+
+    for (const dir of [hoisted, nested]) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), '{"name":"dual"}');
+    }
+
+    expect(findPackageDir('dual', join(tmp, 'node_modules', 'consumer', 'lib'))).toBe(nested);
+    expect(findPackageDir('dual', join(tmp, 'dist'))).toBe(hoisted);
+    expect(findPackageDir('missing', tmp)).toBeNull();
+  });
+});
+
+describe('packageDirOfFile', () => {
+  it('returns the innermost copy of the package on the path', () => {
+    expect(packageDirOfFile('/app/node_modules/consumer/node_modules/dual/lib/x.js', 'dual')).toBe(
+      '/app/node_modules/consumer/node_modules/dual',
+    );
+    expect(packageDirOfFile('/app/node_modules/dual/lib/x.js', 'dual')).toBe('/app/node_modules/dual');
+    expect(packageDirOfFile('/app/node_modules/.pnpm/dual@2/node_modules/dual/index.js', 'dual')).toBe(
+      '/app/node_modules/.pnpm/dual@2/node_modules/dual',
+    );
+    expect(packageDirOfFile('/app/node_modules/@scope/pkg/index.js', '@scope/pkg')).toBe('/app/node_modules/@scope/pkg');
+  });
+
+  it('returns null when the file is not inside the package', () => {
+    expect(packageDirOfFile('/app/node_modules/other/index.js', 'dual')).toBeNull();
   });
 });

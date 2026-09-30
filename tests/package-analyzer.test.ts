@@ -94,6 +94,19 @@ describe('PackageAnalyzer', () => {
 
     expect(analyzer.isSafeToBundle('@scope/pkg/sub/path')).toBe(true);
   });
+
+  it('judges the copy the importer resolves to, not the hoisted one', () => {
+    writePkg('dual', { main: './index.js' }, { 'index.js': 'module.exports = 1;' });
+    writePkg('consumer/node_modules/dual', { type: 'module', main: './index.js' }, { 'index.js': 'export default 1;' });
+
+    const analyzer = new PackageAnalyzer(tmp);
+    const importer = join(tmp, 'node_modules', 'consumer', 'index.js');
+
+    expect(analyzer.isSafeToBundle('dual', importer)).toBe(true);
+    expect(analyzer.isSafeToBundle('dual/sub', importer)).toBe(true);
+    expect(analyzer.isSafeToBundle('dual')).toBe(false);
+    expect(analyzer.isSafeToBundle('dual', join(tmp, 'dist', 'entry.mjs'))).toBe(false);
+  });
 });
 
 describe('rewrite external callback (inline at the rolldown call site)', () => {

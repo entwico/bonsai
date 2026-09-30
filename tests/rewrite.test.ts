@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -132,5 +132,109 @@ describe('rewrite unresolvable bare imports', () => {
     const output = readFileSync(join(dist, 'entry.mjs'), 'utf8');
 
     expect(output).toMatch(/from\s*["']exports-pkg\/sub["']/);
+  });
+});
+
+describe('rewrite nested package copies', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = realpathSync(mkdtempSync(join(tmpdir(), 'rewrite-nested-')));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  function writePkg(dir: string, pkgJson: object, files: Record<string, string>) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(pkgJson));
+
+    for (const [relPath, contents] of Object.entries(files)) {
+      writeFileSync(join(dir, relPath), contents);
+    }
+  }
+
+  function writeEntry(source: string): string {
+    const dist = join(tmp, 'dist');
+
+    mkdirSync(dist, { recursive: true });
+    writeFileSync(join(dist, 'entry.mjs'), source);
+
+    return join(dist, 'entry.mjs');
+  }
+
+  // the hoisted copy is CJS without the subpath export; the copy the consumer
+  // resolves to is ESM and must be bundled on its own merits.
+  it('bundles a nested ESM copy even when the hoisted copy is not bundleable', async () => {
+    writePkg(
+      join(tmp, 'node_modules', 'dual'),
+      { name: 'dual', version: '1.0.0', main: './index.js' },
+      { 'index.js': 'module.exports = { value: "hoisted" };' },
+    );
+    writePkg(
+      join(tmp, 'node_modules', 'consumer', 'node_modules', 'dual'),
+      { name: 'dual', version: '2.0.0', type: 'module', exports: { '.': './index.js', './sub': './sub.js' } },
+      { 'index.js': 'export const value = "nested";', 'sub.js': 'export const sub = "nested-sub";' },
+    );
+    writePkg(
+      join(tmp, 'node_modules', 'consumer'),
+      { name: 'consumer', type: 'module', main: './index.js' },
+      { 'index.js': 'import { sub } from "dual/sub";\nexport const fromConsumer = sub;' },
+    );
+
+    const entry = writeEntry('export { fromConsumer } from "consumer";');
+    const { classification, nestedExternals } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect(classification.external.has('dual')).toBe(false);
+    expect(nestedExternals).toEqual([]);
+
+    const output = readFileSync(entry, 'utf8');
+
+    expect(output).not.toMatch(/["']dual\/sub["']/);
+
+    const mod = await import(pathToFileURL(entry).href);
+
+    expect(mod.fromConsumer).toBe('nested-sub');
+  });
+
+  // a nested external cannot keep its bare specifier: node would resolve it from
+  // the bundle's location to the hoisted copy. it is referenced by relative path.
+  it('references a nested external copy by relative path and the hoisted copy by bare specifier', async () => {
+    writePkg(
+      join(tmp, 'node_modules', 'dual'),
+      { name: 'dual', version: '1.0.0', main: './index.js' },
+      { 'index.js': 'module.exports = { value: "hoisted" };' },
+    );
+
+    const nestedDir = join(tmp, 'node_modules', 'consumer', 'node_modules', 'dual');
+
+    writePkg(
+      nestedDir,
+      { name: 'dual', version: '2.0.0', main: './index.js' },
+      { 'index.js': 'module.exports = { value: "nested" };' },
+    );
+    writePkg(
+      join(tmp, 'node_modules', 'consumer'),
+      { name: 'consumer', type: 'module', main: './index.js' },
+      { 'index.js': 'import dual from "dual";\nexport const fromConsumer = dual.value;' },
+    );
+
+    const entry = writeEntry(
+      'import dual from "dual";\nexport { fromConsumer } from "consumer";\nexport const fromEntry = dual.value;',
+    );
+    const { nestedExternals } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect(nestedExternals).toEqual([{ pkg: 'dual', dir: nestedDir, file: join(nestedDir, 'index.js') }]);
+
+    const output = readFileSync(entry, 'utf8');
+
+    expect(output).toMatch(/["']dual["']/);
+    expect(output).toContain('../node_modules/consumer/node_modules/dual/index.js');
+
+    const mod = await import(pathToFileURL(entry).href);
+
+    expect(mod.fromEntry).toBe('hoisted');
+    expect(mod.fromConsumer).toBe('nested');
   });
 });

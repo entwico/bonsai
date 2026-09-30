@@ -257,6 +257,7 @@ describe('prune', () => {
         reasons: new Map(),
       },
       outDirs: [join(tempDir, 'dist', 'server')],
+      nestedExternals: [],
     });
 
     const { nodeFileTrace } = await import('@vercel/nft');
@@ -279,5 +280,48 @@ describe('prune', () => {
     expect(existsSync(join(tempDir, 'node_modules', 'native-pkg', 'index.js'))).toBe(true);
     expect(existsSync(join(tempDir, 'node_modules', 'native-pkg', 'lib', 'a.js'))).toBe(true);
     expect(existsSync(join(tempDir, 'node_modules', 'native-pkg', 'lib', 'helpers', 'b.js'))).toBe(true);
+  });
+
+  it('preserves a nested copy of a force-external package that the bundle references', async () => {
+    const nested = join(tempDir, 'node_modules', 'consumer', 'node_modules', 'native-pkg');
+
+    mkdirSync(join(nested, 'lib'), { recursive: true });
+    writeFileSync(join(nested, 'package.json'), '{"name":"native-pkg"}');
+    writeFileSync(join(nested, 'index.js'), 'module.exports = 1');
+    writeFileSync(join(nested, 'lib', 'a.js'), 'module.exports = "a"');
+    mkdirSync(join(tempDir, 'node_modules', 'native-pkg'), { recursive: true });
+    writeFileSync(join(tempDir, 'node_modules', 'native-pkg', 'package.json'), '{"name":"native-pkg"}');
+    writeFileSync(join(tempDir, 'node_modules', 'native-pkg', 'index.js'), 'module.exports = 2');
+    mkdirSync(join(tempDir, 'dist', 'server'), { recursive: true });
+    writeFileSync(join(tempDir, 'dist', 'server', 'main.mjs'), '');
+
+    const { rewrite } = await import('../src/bundle/rewrite');
+
+    vi.mocked(rewrite).mockResolvedValue({
+      classification: {
+        external: new Set(['native-pkg']),
+        reasons: new Map(),
+      },
+      outDirs: [join(tempDir, 'dist', 'server')],
+      nestedExternals: [{ pkg: 'native-pkg', dir: nested, file: join(nested, 'index.js') }],
+    });
+
+    const { nodeFileTrace } = await import('@vercel/nft');
+
+    vi.mocked(nodeFileTrace).mockResolvedValue({
+      fileList: new Set(['dist/server/main.mjs', 'node_modules/consumer/node_modules/native-pkg/index.js']),
+      esmFileList: new Set(),
+      reasons: new Map(),
+      warnings: new Set(),
+    });
+
+    const { prune } = await import('../src/commands/prune');
+
+    await prune(['./dist/server/main.mjs'], { rewrite: true });
+
+    expect(vi.mocked(nodeFileTrace).mock.lastCall?.[0]).toContain(join(nested, 'index.js'));
+    expect(existsSync(join(nested, 'lib', 'a.js'))).toBe(true);
+    expect(existsSync(join(nested, 'package.json'))).toBe(true);
+    expect(existsSync(join(tempDir, 'node_modules', 'native-pkg', 'index.js'))).toBe(true);
   });
 });

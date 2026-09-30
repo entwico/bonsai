@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const PKG_RE = /node_modules\/(@[^/]+\/[^/]+|[^/]+)/g;
 
@@ -42,6 +42,35 @@ export function packageJsonPath(cwd: string, pkg: string): string {
 
 export function packageExists(cwd: string, pkg: string): boolean {
   return existsSync(packageJsonPath(cwd, pkg));
+}
+
+// the `node_modules/<pkg>` directory node resolves `pkg` to from `fromDir`:
+// the nearest one walking up the directory tree.
+export function findPackageDir(pkg: string, fromDir: string): string | null {
+  let dir = fromDir;
+
+  while (true) {
+    const candidate = join(dir, 'node_modules', pkg);
+
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+
+    const parent = dirname(dir);
+
+    if (parent === dir) return null;
+
+    dir = parent;
+  }
+}
+
+// directory of the `pkg` copy a file belongs to: the innermost `node_modules/<pkg>`
+// on its path, so nested copies and pnpm's `.pnpm/<pkg>@<ver>/node_modules/<pkg>` resolve correctly.
+export function packageDirOfFile(file: string, pkg: string): string | null {
+  const marker = `/node_modules/${pkg}/`;
+  const index = file.lastIndexOf(marker);
+
+  if (index === -1) return null;
+
+  return file.slice(0, index + marker.length - 1);
 }
 
 // map every package in an NFT trace to its real on-disk directory

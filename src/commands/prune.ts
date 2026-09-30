@@ -37,7 +37,7 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
       console.log(`rewriting ${entrypoints.length} ${label} in place`);
     }
 
-    const { classification, outDirs } = await rewrite({
+    const { classification, outDirs, nestedExternals } = await rewrite({
       entrypoints,
       cwd,
       minify: opts.minify,
@@ -64,8 +64,18 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
     }
 
     traceEntries = entrypoints.map((e) => resolve(cwd, e));
-    externalRoots = resolveExternalRoots(classification.external, cwd);
+    // nested copies are referenced by relative path from the bundle; rolldown's
+    // __require helper hides those edges from NFT, so they are traced as roots too.
+    externalRoots = [...resolveExternalRoots(classification.external, cwd), ...nestedExternals.map((n) => n.file)];
     forceExternal = classification.external;
+
+    if (verbose && nestedExternals.length > 0) {
+      console.log(`\nnested externals (${nestedExternals.length}):`);
+
+      const sorted = nestedExternals.toSorted((a, b) => sortByString(a.dir, b.dir));
+
+      for (const n of sorted) console.log(`  ${n.pkg}  ${n.dir.slice(cwd.length + 1)}`);
+    }
 
     if (verbose && externalRoots.length > 0) {
       const label = externalRoots.length === 1 ? 'root' : 'roots';
@@ -132,10 +142,10 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
     if (match) packages.add(match[1]);
   }
 
-  // node's resolver needs package.json for every enclosing package; NFT doesn't always emit it.
-  const enclosingPackageJsons = (file: string): string[] => {
+  // every `node_modules/<pkg>` directory enclosing a file, outermost first
+  const enclosingPackageDirs = (file: string): { pkg: string; dir: string }[] => {
     const segments = file.split('/');
-    const paths: string[] = [];
+    const dirs: { pkg: string; dir: string }[] = [];
 
     for (let i = 0; i < segments.length - 1; i++) {
       if (segments[i] !== 'node_modules') continue;
@@ -148,23 +158,32 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
 
       if (pkgEnd >= segments.length) continue;
 
-      paths.push(`${segments.slice(0, pkgEnd + 1).join('/')}/package.json`);
+      dirs.push({ pkg: segments.slice(i + 1, pkgEnd + 1).join('/'), dir: segments.slice(0, pkgEnd + 1).join('/') });
     }
 
-    return paths;
+    return dirs;
   };
 
-  const derivedPackageJsons: string[] = [];
-
-  for (const f of tracedSet) derivedPackageJsons.push(...enclosingPackageJsons(f));
-  for (const p of derivedPackageJsons) tracedSet.add(p);
-
   // force-external packages have untraceable codepaths by definition; preserve them whole.
+  // a traced file inside a nested copy marks that copy as the one in use, so it is kept whole too.
   const keepRoots = new Set<string>();
 
   for (const pkg of forceExternal) {
     keepRoots.add(`node_modules/${pkg}`);
   }
+
+  // node's resolver needs package.json for every enclosing package; NFT doesn't always emit it.
+  const derivedPackageJsons: string[] = [];
+
+  for (const f of tracedSet) {
+    for (const { pkg, dir } of enclosingPackageDirs(f)) {
+      derivedPackageJsons.push(`${dir}/package.json`);
+
+      if (forceExternal.has(pkg)) keepRoots.add(dir);
+    }
+  }
+
+  for (const p of derivedPackageJsons) tracedSet.add(p);
 
   const warningCount = result.warnings.size;
 

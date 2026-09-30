@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Parser } from 'acorn';
+import { findPackageDir } from './package-utils';
 
 export class PackageAnalyzer {
   private _cwd: string;
@@ -18,45 +19,21 @@ export class PackageAnalyzer {
     return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]!;
   }
 
-  private _readPackageJson(pkgRoot: string): any | null {
-    const cached = this._pkgJsonCache.get(pkgRoot);
+  private _readPackageJson(pkgDir: string): any | null {
+    const cached = this._pkgJsonCache.get(pkgDir);
 
     if (cached !== undefined) return cached;
 
-    const path = this._findPackageJson(pkgRoot);
-
-    if (!path) {
-      this._pkgJsonCache.set(pkgRoot, null);
-
-      return null;
-    }
-
     try {
-      const json = JSON.parse(readFileSync(path, 'utf8'));
+      const json = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
 
-      this._pkgJsonCache.set(pkgRoot, json);
+      this._pkgJsonCache.set(pkgDir, json);
 
       return json;
     } catch {
-      this._pkgJsonCache.set(pkgRoot, null);
+      this._pkgJsonCache.set(pkgDir, null);
 
       return null;
-    }
-  }
-
-  private _findPackageJson(pkgRoot: string): string | null {
-    let dir = this._cwd;
-
-    while (true) {
-      const candidate = join(dir, 'node_modules', pkgRoot, 'package.json');
-
-      if (existsSync(candidate)) return candidate;
-
-      const parent = dirname(dir);
-
-      if (parent === dir) return null;
-
-      dir = parent;
     }
   }
 
@@ -214,33 +191,34 @@ export class PackageAnalyzer {
     return null;
   }
 
-  isSafeToBundle(specifier: string): boolean {
-    const pkgRoot = this._packageRoot(specifier);
-    const cached = this._verdict.get(pkgRoot);
+  private _analyze(pkgDir: string): boolean {
+    const pkgJson = this._readPackageJson(pkgDir);
 
-    if (cached !== undefined) return !cached;
+    if (!pkgJson) return false;
 
-    const pkgJson = this._readPackageJson(pkgRoot);
-
-    if (!pkgJson) {
-      this._verdict.set(pkgRoot, true);
-
-      return false;
-    }
-
-    const pkgJsonPath = this._findPackageJson(pkgRoot)!;
-    const pkgDir = dirname(pkgJsonPath);
     const entry = this._findEsmEntry(pkgDir, pkgJson);
 
-    if (!entry) {
-      this._verdict.set(pkgRoot, true);
+    if (!entry) return false;
 
-      return false;
-    }
+    return this._isFileEsmSafe(entry, pkgJson.type === 'module', new Set());
+  }
 
-    const safe = this._isFileEsmSafe(entry, pkgJson.type === 'module', new Set());
+  // the package is looked up the way node would from the importer (nearest
+  // `node_modules/<pkg>` walking up), so a nested copy is judged on its own
+  // shape rather than on whichever version got hoisted to the top level.
+  isSafeToBundle(specifier: string, importer?: string): boolean {
+    const pkgRoot = this._packageRoot(specifier);
+    const pkgDir = findPackageDir(pkgRoot, importer ? dirname(importer) : this._cwd);
 
-    this._verdict.set(pkgRoot, !safe);
+    if (!pkgDir) return false;
+
+    const cached = this._verdict.get(pkgDir);
+
+    if (cached !== undefined) return cached;
+
+    const safe = this._analyze(pkgDir);
+
+    this._verdict.set(pkgDir, safe);
 
     return safe;
   }

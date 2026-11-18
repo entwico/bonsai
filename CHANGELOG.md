@@ -1,5 +1,11 @@
 # @entwico/bonsai
 
+## 3.0.3
+
+### Patch Changes
+
+- 6992e76: do not inline a package that an external package also loads from node_modules
+
 ## 3.0.2
 
 ### Patch Changes

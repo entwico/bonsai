@@ -197,13 +197,9 @@ describe('rewrite external callback (inline at the rolldown call site)', () => {
     expect(isExternal('@radix/widget')).toBe(false);
   });
 
-  // regression: koa publishes an ESM facade `dist/koa.mjs` that does
-  // `import mod from "../lib/application.js"`. the relative .js import lands
-  // on a CJS file (koa has no `type: module`) — bundling would inline the CJS
-  // through rolldown's createRequire shim, breaking `require('on-finished')`
-  // tracing. caught by the per-file walk: entry imports a relative `.js` in
-  // a non-`type: module` package → unsafe.
-  it('regression (koa-shape): externalizes ESM facade that re-exports a CJS sibling', () => {
+  // a relative `.js` import in a package without `type: module` lands on CJS;
+  // inlining it would hide its require() calls from the trace.
+  it('externalizes an ESM facade that re-exports a CJS sibling', () => {
     writePkg(
       'koa',
       {
@@ -223,7 +219,7 @@ describe('rewrite external callback (inline at the rolldown call site)', () => {
   // partner case: oidc-provider is pure ESM (`type: module`) and only
   // imports koa as a bare specifier. it should bundle — the koa import goes
   // through the matcher and gets externalized on its own merits.
-  it('regression (oidc-provider-shape): bundles ESM package even if a bare-specifier dep is unsafe', () => {
+  it('bundles an ESM package even if a bare-specifier dep is unsafe', () => {
     writePkg(
       'oidc-provider',
       { type: 'module', main: './lib/index.js', dependencies: { koa: '*' } },

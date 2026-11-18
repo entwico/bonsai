@@ -13,12 +13,12 @@ const FLOWS = [
     name: 'rewrite',
     rewrite: true,
     // -r rebundles rxjs, so the middleware/route singleton check is out of scope here.
-    routes: ['/api/trace', '/api/resize', '/api/resolve'],
+    routes: ['/api/trace', '/api/resize', '/api/resolve', '/form'],
   },
   {
     name: 'prune',
     rewrite: false,
-    routes: ['/api/trace', '/api/resize', '/api/stream', '/api/resolve'],
+    routes: ['/api/trace', '/api/resize', '/api/stream', '/api/resolve', '/form'],
   },
 ] as const;
 
@@ -61,6 +61,14 @@ for (const runtime of runtimes) {
           const trace = probes.find((p) => p.route === '/api/trace')!;
 
           expect(trace.body).toContain('OTLPTraceExporter');
+        });
+
+        // the provider is rendered by the external @samples/form-kit, the field reads it
+        // through the app's own react-hook-form import — one copy must serve both.
+        it('renders a form whose provider and consumer come from different importers', () => {
+          const probe = probes.find((p) => p.route === '/form')!;
+
+          expect(probe.body).toContain('name="name"');
         });
 
         it('loads the package reached only via literal import.meta.resolve', () => {

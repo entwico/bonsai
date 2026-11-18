@@ -27,9 +27,14 @@ export interface PreparedSample {
 
 // isolated copy of a sample: sources + the chosen package manager's lockfile. a .prototools
 // pins the node version so every pnpm/npm/node call in this dir resolves the same runtime.
+// the local packages samples depend on via `file:../packages/*` are copied next to it.
 export function prepareSample(sampleName: string, pm: Pm, runtime: NodeRuntime): PreparedSample {
-  const src = join(repoRoot, 'samples', sampleName);
-  const dir = mkdtempSync(join(tmpdir(), `nft-e2e-${sampleName}-${pm}-`));
+  const samples = join(repoRoot, 'samples');
+  const src = join(samples, sampleName);
+  const root = mkdtempSync(join(tmpdir(), `nft-e2e-${sampleName}-${pm}-`));
+  const dir = join(root, sampleName);
+
+  cpSync(join(samples, 'packages'), join(root, 'packages'), { recursive: true });
 
   for (const entry of SAMPLE_SOURCES) {
     const from = join(src, entry);
@@ -41,7 +46,7 @@ export function prepareSample(sampleName: string, pm: Pm, runtime: NodeRuntime):
 
   if (runtime.version) writeFileSync(join(dir, '.prototools'), `node = "${runtime.version}"\n`);
 
-  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return { dir, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 function run(cmd: string, args: string[], cwd: string): void {
@@ -115,7 +120,7 @@ function httpGet(port: number, path: string): Promise<{ status: number; body: st
     req.setEncoding('utf8');
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
-      const status = Number(raw.match(/^HTTP\/1\.1 (\d+)/)?.[1] ?? 0);
+      const status = Number(/^HTTP\/1\.1 (\d+)/.exec(raw)?.[1] ?? 0);
       const body = raw.slice(raw.indexOf('\r\n\r\n') + 4);
 
       resolve({ status, body });

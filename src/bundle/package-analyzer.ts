@@ -212,6 +212,10 @@ export class PackageAnalyzer {
 
     if (!pkgDir) return false;
 
+    return this.isDirSafeToBundle(pkgDir);
+  }
+
+  isDirSafeToBundle(pkgDir: string): boolean {
     const cached = this._verdict.get(pkgDir);
 
     if (cached !== undefined) return cached;

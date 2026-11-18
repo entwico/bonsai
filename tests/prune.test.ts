@@ -254,6 +254,7 @@ describe('prune', () => {
     vi.mocked(rewrite).mockResolvedValue({
       classification: {
         external: new Set(['native-pkg']),
+        shared: new Set(),
         reasons: new Map(),
       },
       outDirs: [join(tempDir, 'dist', 'server')],
@@ -300,6 +301,7 @@ describe('prune', () => {
     vi.mocked(rewrite).mockResolvedValue({
       classification: {
         external: new Set(['native-pkg']),
+        shared: new Set(),
         reasons: new Map(),
       },
       outDirs: [join(tempDir, 'dist', 'server')],

@@ -238,3 +238,119 @@ describe('rewrite nested package copies', () => {
     expect(mod.fromConsumer).toBe('nested');
   });
 });
+
+describe('rewrite packages shared with an external package', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = realpathSync(mkdtempSync(join(tmpdir(), 'rewrite-shared-')));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  function writePkg(name: string, pkgJson: object, files: Record<string, string>) {
+    const dir = join(tmp, 'node_modules', name);
+
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, ...pkgJson }));
+
+    for (const [relPath, contents] of Object.entries(files)) {
+      writeFileSync(join(dir, relPath), contents);
+    }
+  }
+
+  function writeEntry(source: string): string {
+    const dist = join(tmp, 'dist');
+
+    mkdirSync(dist, { recursive: true });
+    writeFileSync(join(dist, 'entry.mjs'), source);
+
+    return join(dist, 'entry.mjs');
+  }
+
+  const STATE_PKG = { type: 'module', exports: { '.': { import: './index.js' } } };
+  const STATE_SOURCE = 'export const registry = new Set();\nexport const provide = (value) => registry.add(value);';
+  const ENTRY_SOURCE = 'import { registry } from "state";\nimport { register } from "ui";\nregister();\nexport { registry };';
+
+  it('keeps a peer external when a force-external package imports it', async () => {
+    writePkg('state', STATE_PKG, { 'index.js': STATE_SOURCE });
+    writePkg(
+      'ui',
+      { type: 'module', exports: { '.': { import: './index.js' } }, peerDependencies: { state: '*' } },
+      {
+        'index.js': [
+          'import { provide } from "state";',
+          'export const register = () => provide("ui");',
+          'export const load = (name) => import(name);',
+        ].join('\n'),
+      },
+    );
+
+    const entry = writeEntry(ENTRY_SOURCE);
+    const { classification } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect(classification.external.has('ui')).toBe(true);
+    expect(classification.shared.has('state')).toBe(true);
+    expect(classification.reasons.get('state')).toEqual([{ reachableFrom: 'ui' }]);
+    expect(readFileSync(entry, 'utf8')).toMatch(/from\s*["']state["']/);
+
+    const mod = await import(pathToFileURL(entry).href);
+
+    expect([...mod.registry]).toEqual(['ui']);
+  });
+
+  it('keeps a package external when a package that cannot be bundled requires it', async () => {
+    writePkg(
+      'state',
+      { type: 'module', exports: { '.': { import: './index.js', require: './index.cjs' } } },
+      {
+        'index.js': STATE_SOURCE,
+        'index.cjs': 'exports.registry = new Set();\nexports.provide = (value) => exports.registry.add(value);',
+      },
+    );
+    writePkg(
+      'ui',
+      { main: './index.js' },
+      { 'index.js': 'const { provide } = require("state");\nexports.register = () => provide("ui");' },
+    );
+
+    const entry = writeEntry(ENTRY_SOURCE);
+    const { classification } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect(classification.shared.has('state')).toBe(true);
+    expect(readFileSync(entry, 'utf8')).toMatch(/from\s*["']state["']/);
+  });
+
+  it('follows the trace transitively through shared packages', async () => {
+    writePkg('store', STATE_PKG, { 'index.js': STATE_SOURCE });
+    writePkg('state', STATE_PKG, { 'index.js': 'export { registry, provide } from "store";' });
+    writePkg(
+      'ui',
+      { main: './index.js' },
+      { 'index.js': 'exports.register = () => import("state").then((state) => state.provide("ui"));' },
+    );
+
+    const entry = writeEntry('import { registry } from "store";\nimport "ui";\nexport { registry };');
+    const { classification } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect([...classification.shared].toSorted(sortByString)).toEqual(['state', 'store']);
+    expect(readFileSync(entry, 'utf8')).toMatch(/from\s*["']store["']/);
+  });
+
+  it('still inlines a declared peer the external package never imports', async () => {
+    writePkg('state', STATE_PKG, { 'index.js': STATE_SOURCE });
+    writePkg(
+      'ui',
+      { main: './index.js', peerDependencies: { state: '*' } },
+      { 'index.js': 'exports.register = () => {};' },
+    );
+
+    const entry = writeEntry(ENTRY_SOURCE);
+    const { classification } = await rewrite({ entrypoints: [entry], cwd: tmp });
+
+    expect(classification.shared.has('state')).toBe(false);
+    expect(readFileSync(entry, 'utf8')).not.toMatch(/["']state["']/);
+  });
+});

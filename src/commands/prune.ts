@@ -6,6 +6,7 @@ import { resolveExternalRoots } from '../bundle/external-roots';
 import { indexTracedPackages } from '../bundle/package-utils';
 import { rewrite } from '../bundle/rewrite';
 import { trace } from '../bundle/trace';
+import type { ExternalReason } from '../bundle/types';
 import { expandGlobs } from '../utils/expand-globs';
 import { sortByString } from '../utils/sort';
 
@@ -15,6 +16,14 @@ export interface PruneOptions {
   minify?: boolean;
   sourcemap?: boolean;
   verbose?: boolean;
+}
+
+function logPackagesWithReasons(packages: Set<string>, reasons: Map<string, ExternalReason[]>): void {
+  for (const pkg of [...packages].toSorted(sortByString)) {
+    const formatted = (reasons.get(pkg) ?? []).map((r) => (typeof r === 'string' ? r : `via ${r.reachableFrom}`)).join(', ');
+
+    console.log(`  ${pkg}  [${formatted}]`);
+  }
 }
 
 export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
@@ -53,14 +62,15 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
     if (verbose) {
       console.log(`\nforce-external packages (${externalCount}):`);
 
-      for (const pkg of [...classification.external].toSorted(sortByString)) {
-        const rs = classification.reasons.get(pkg) ?? [];
-        const formatted = rs.map((r) => (typeof r === 'string' ? r : `via ${r.reachableFrom}`)).join(', ');
-
-        console.log(`  ${pkg}  [${formatted}]`);
-      }
+      logPackagesWithReasons(classification.external, classification.reasons);
     } else {
       console.log(`force-external: ${externalCount} packages`);
+    }
+
+    if (verbose && classification.shared.size > 0) {
+      console.log(`\nshared with external packages (${classification.shared.size}):`);
+
+      logPackagesWithReasons(classification.shared, classification.reasons);
     }
 
     traceEntries = entrypoints.map((e) => resolve(cwd, e));
@@ -137,7 +147,7 @@ export async function prune(entrypoints: string[], opts: PruneOptions = {}) {
   const packages = new Set<string>();
 
   for (const f of tracedSet) {
-    const match = f.match(/node_modules\/(@[^/]+\/[^/]+|[^/]+)/);
+    const match = /node_modules\/(@[^/]+\/[^/]+|[^/]+)/.exec(f);
 
     if (match) packages.add(match[1]);
   }

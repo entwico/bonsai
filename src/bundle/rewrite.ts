@@ -95,7 +95,10 @@ function createExternalsPlugin(opts: ExternalsPluginOptions): Plugin {
 
       if (resolved.external) return resolved;
 
-      const external = opts.classification.external.has(pkg) || !opts.analyzer.isSafeToBundle(source, importer);
+      const external =
+        opts.classification.external.has(pkg) ||
+        opts.classification.shared.has(pkg) ||
+        !opts.analyzer.isSafeToBundle(source, importer);
 
       if (!external) return resolved;
 
@@ -115,8 +118,8 @@ export async function rewrite(opts: RewriteOptions): Promise<RewriteResult> {
   // location only when the input path is absolute. relative inputs cause
   // `./chunks/foo.mjs` to be looked up under cwd instead.
   const absoluteEntries = opts.entrypoints.map((e) => resolve(opts.cwd, e));
-  const classification = await classify(absoluteEntries, opts.cwd);
   const analyzer = new PackageAnalyzer(opts.cwd);
+  const classification = await classify(absoluteEntries, opts.cwd, analyzer);
   const unresolved = new Set<string>();
   const nestedExternals: NestedExternal[] = [];
 

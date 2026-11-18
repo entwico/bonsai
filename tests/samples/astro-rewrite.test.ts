@@ -78,6 +78,10 @@ describe('rewrite samples/astro-app', () => {
     expect(combinedOutput).toMatch(/from\s*["']@opentelemetry\/sdk-node["']/);
   });
 
+  it('does not inline react-hook-form, which the external @samples/form-kit loads too', () => {
+    expect(combinedOutput).not.toContain('HookFormContext');
+  });
+
   // rolldown doesn't recognize `new URL(..., import.meta.url)` as an asset
   // reference, so worker files passed via that pattern get lost. when this
   // changes, vitest will report "expected fail but passed" and the marker

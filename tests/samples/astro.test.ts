@@ -49,4 +49,15 @@ describe('classify samples/astro-app', () => {
     expect(classification.external).toContain('escape-string-regexp');
     expect(classification.reasons.get('escape-string-regexp')).toContain('bundled-external');
   });
+
+  it('classifies @samples/form-kit as external', () => {
+    expect(classification.external).toContain('@samples/form-kit');
+  });
+
+  // a peer of form-kit that the app imports as well: it must not be inlined next to
+  // the node_modules copy form-kit loads.
+  it('shares react-hook-form with @samples/form-kit', () => {
+    expect(classification.shared).toContain('react-hook-form');
+    expect(classification.reasons.get('react-hook-form')).toEqual([{ reachableFrom: '@samples/form-kit' }]);
+  });
 });

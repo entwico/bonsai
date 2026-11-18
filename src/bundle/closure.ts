@@ -1,8 +1,10 @@
 import { readPackageJson } from './package-utils';
 import type { DetectReason, ExternalReason } from './types';
 
-// peerDependencies are intentionally NOT followed: peers are provided
-// by the consumer and the closure will pick them up via consumer's deps.
+// follows the declared `dependencies` / `optionalDependencies` of the detected packages:
+// those have codepaths the trace cannot see, so their declared deps are kept as well.
+// peerDependencies are not followed here — many are declared and never loaded. a peer
+// an external package does import is found in the trace by `findSharedPackages`.
 export interface Closure {
   external: Set<string>;
   reasons: Map<string, ExternalReason[]>;

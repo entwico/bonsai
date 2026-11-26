@@ -6,8 +6,7 @@ export type DemoDialogProps = {
   description: string;
 };
 
-// self-contained: provider + consumer in the same React tree (per
-// project rule about React context across Astro). same React + radix
+// self-contained: provider + consumer in the same React tree. same React + radix
 // graph is also imported by Tabs.tsx, so on the server side both pages
 // must end up sharing one React instance — otherwise Radix's internal
 // useContext returns nothing and the components throw.

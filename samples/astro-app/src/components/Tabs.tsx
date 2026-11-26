@@ -10,7 +10,7 @@ export type DemoTabsProps = {
   }[];
 };
 
-// imports DemoDialog. /products imports DemoDialog directly. /docs
+// /products imports DemoDialog directly. /docs
 // imports DemoTabs which transitively imports DemoDialog. so the
 // Dialog subgraph is reachable from both page chunks via different
 // edges — the bundler should hoist Dialog (and React + Radix it pulls

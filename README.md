@@ -16,7 +16,7 @@ npx @entwico/bonsai install ./dist/server/entry.mjs
 
 ### `prune`
 
-Rebundle + trace + delete pass on an existing `node_modules/`. For pnpm projects, the install that produced `node_modules/` must have used `--node-linker=hoisted` — symlinked layouts cannot be pruned reliably.
+Rebundle + trace + delete pass on an existing `node_modules/`. For pnpm projects, the install that produced `node_modules/` must have used `--node-linker=hoisted`.
 
 ```bash
 npx @entwico/bonsai prune ./dist/server/entry.mjs

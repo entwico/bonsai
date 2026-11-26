@@ -40,7 +40,7 @@ describe('trace', () => {
     });
   }
 
-  it('keeps both condition targets for require calls created by createRequire in an esm file', async () => {
+  it('keeps only the require target for require calls created by createRequire in an esm file', async () => {
     writeDualConditionPackage(`
       import { createRequire } from 'node:module';
       const require = createRequire(import.meta.url);
@@ -51,7 +51,7 @@ describe('trace', () => {
     const result = await trace([join(tmp, 'main.mjs')], tmp);
 
     expect(result.fileList).toContain('node_modules/fonts/fonts/Helvetica.cjs');
-    expect(result.fileList).toContain('node_modules/fonts/fonts/Helvetica.mjs');
+    expect(result.fileList).not.toContain('node_modules/fonts/fonts/Helvetica.mjs');
   });
 
   it('keeps only the import target for static imports in an esm file without createRequire', async () => {

@@ -22,7 +22,7 @@ export function resolveExternalRoots(external: Set<string>, cwd: string): string
       // require.resolve returns the bare name for shadowed builtins; ignore those.
       if (isAbsolute(r)) resolved = r;
     } catch {
-      // fall through to package.json fallback.
+      // resolution failed; the package.json fallback below handles it
     }
 
     if (resolved) {

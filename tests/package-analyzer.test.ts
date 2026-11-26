@@ -62,7 +62,7 @@ describe('PackageAnalyzer', () => {
     const analyzer = new PackageAnalyzer(tmp);
 
     expect(analyzer.isSafeToBundle('cached')).toBe(true);
-    // mutate package.json — verdict should not change because of cache
+
     writeFileSync(
       join(tmp, 'node_modules', 'cached', 'package.json'),
       JSON.stringify({ name: 'cached', main: './index.js' }),

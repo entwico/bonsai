@@ -1,5 +1,11 @@
 # @entwico/bonsai
 
+## 3.0.4
+
+### Patch Changes
+
+- 99044a9: uses @vercel/nft 1.11.12; a `createRequire` call in an ES module keeps only the file node loads
+
 ## 3.0.3
 
 ### Patch Changes
